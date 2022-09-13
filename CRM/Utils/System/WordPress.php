@@ -1509,4 +1509,96 @@ class CRM_Utils_System_WordPress extends CRM_Utils_System_Base {
     return apply_filters('civicrm_exit_after_fatal', $ret);
   }
 
+  /**
+   * Make sure clean URLs are properly set in settings file.
+   *
+   * @return CRM_Utils_Check_Message[]
+   */
+  public function checkCleanurls() {
+    //$config = CRM_Core_Config::singleton();
+
+    $clean = $civicrm_setting['CIVICRM_CLEANURL'];
+    if ($clean == 1) {
+      //cleanURLs are enabled in CiviCRM, let's make sure the wordpress permalink settings and cache are actually correct by checking the first active contribution page
+      $contributionPages = \Civi\Api4\ContributionPage::get(FALSE)
+        ->addSelect('id')
+        ->addWhere('is_active', '=', TRUE)
+        ->setLimit(1)
+        ->execute();
+      if (count($contributionPages) > 0) {
+        $activePageId = $contributionPages[0]['id'];
+        $message = self::checkCleanPage('/contribute/transact/?reset=1&id=', $activePageId, $config);
+
+        return $message;
+      }
+      else {
+        //no active contribution pages, we can check an event page. This probably won't ever happen.
+        $eventPages = \Civi\Api4\Event::get(FALSE)
+          ->addSelect('id')
+          ->addWhere('is_active', '=', TRUE)
+          ->setLimit(1)
+          ->execute();
+        if (count($eventPages) > 0) {
+          $activePageId = $eventPages[0]['id'];
+          $message = self::checkCleanPage('/event/info/?reset=1&id=', $activePageId, $config);
+
+          return $message;
+        }
+        else {
+          //If there are no active event or contribution pages, we'll skip this check for now.
+
+          return [];
+        }
+      }
+    }
+    else {
+      //cleanURLs aren't enabled or aren't defined correctly in CiviCRM, admin should check civicrm.settings.php
+      $warning = 'Clean URLs are not enabled correctly in CiviCRM. This can lead to "valid id" errors for users registering for events or making donations. Check civicrm.settings.php and review <a href="https://docs.civicrm.org/sysadmin/en/latest/integration/wordpress/clean-urls/">the documentation</a> for more information.';
+
+      return [
+        new CRM_Utils_Check_Message(
+          __FUNCTION__,
+          $warning,
+          ts('Clean URLs Not Enabled'),
+          \Psr\Log\LogLevel::WARNING,
+          'fa-wordpress'
+        ),
+      ];
+    }
+  }
+
+  private static function checkCleanPage($slug, $id, $config) {
+    try {
+      $client = new \GuzzleHttp\Client();
+      $res = $client->head($config->userFrameworkBaseURL . $config->wpBasePage . $slug . $id);
+      $httpCode = $res->getStatusCode();
+    } catch (Exception $e) {
+      return [
+        new CRM_Utils_Check_Message(
+          __FUNCTION__,
+          'Could not load a clean page to check',
+          ts('WordPress Permalinks cache needs to be refreshed'),
+          \Psr\Log\LogLevel::ERROR,
+          'fa-wordpress'
+        )
+      ];
+    }
+
+    if ($httpCode == 404) {
+      $warning = 'Go to Settings > Permalinks and click "Save". Ideally this would be a button that just refreshes that cache';
+
+      return [
+        new CRM_Utils_Check_Message(
+          __FUNCTION__,
+          $warning,
+          ts('Wordpress Permalinks cache needs to be refreshed.'),
+          \Psr\Log\LogLevel::WARNING,
+          'fa-wordpress'
+          ),
+      ];
+    }
+
+    //sanity
+    return [];
+  }
 }
