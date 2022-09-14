@@ -1515,9 +1515,9 @@ class CRM_Utils_System_WordPress extends CRM_Utils_System_Base {
    * @return CRM_Utils_Check_Message[]
    */
   public function checkCleanurls() {
-    //$config = CRM_Core_Config::singleton();
+    $config = CRM_Core_Config::singleton();
+    $clean = CIVICRM_CLEANURL;
 
-    $clean = $civicrm_setting['CIVICRM_CLEANURL'];
     if ($clean == 1) {
       //cleanURLs are enabled in CiviCRM, let's make sure the wordpress permalink settings and cache are actually correct by checking the first active contribution page
       $contributionPages = \Civi\Api4\ContributionPage::get(FALSE)
@@ -1568,16 +1568,18 @@ class CRM_Utils_System_WordPress extends CRM_Utils_System_Base {
   }
 
   private static function checkCleanPage($slug, $id, $config) {
+    $page = $config->userFrameworkBaseURL . $config->wpBasePage . $slug . $id;
     try {
       $client = new \GuzzleHttp\Client();
-      $res = $client->head($config->userFrameworkBaseURL . $config->wpBasePage . $slug . $id);
+      $res = $client->head($page);
       $httpCode = $res->getStatusCode();
     } catch (Exception $e) {
+      Civi::log()->error("Could not run " . __FUNCTION__ . " on $page. GuzzleHttp\Client returned " . $e->getMessage());
       return [
         new CRM_Utils_Check_Message(
           __FUNCTION__,
           'Could not load a clean page to check',
-          ts('WordPress Permalinks cache needs to be refreshed'),
+          ts('WordPress Permalinks cache needs to be refreshed '),
           \Psr\Log\LogLevel::ERROR,
           'fa-wordpress'
         )
@@ -1585,7 +1587,7 @@ class CRM_Utils_System_WordPress extends CRM_Utils_System_Base {
     }
 
     if ($httpCode == 404) {
-      $warning = 'Go to Settings > Permalinks and click "Save". Ideally this would be a button that just refreshes that cache';
+      $warning = 'Go to Settings > Permalinks and click "Save".';
 
       return [
         new CRM_Utils_Check_Message(
