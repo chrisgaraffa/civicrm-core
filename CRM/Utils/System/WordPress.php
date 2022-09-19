@@ -1589,15 +1589,21 @@ class CRM_Utils_System_WordPress extends CRM_Utils_System_Base {
     if ($httpCode == 404) {
       $warning = 'Go to Settings > Permalinks and click "Save".';
 
-      return [
-        new CRM_Utils_Check_Message(
-          __FUNCTION__,
-          $warning,
-          ts('Wordpress Permalinks cache needs to be refreshed.'),
-          \Psr\Log\LogLevel::WARNING,
-          'fa-wordpress'
-          ),
-      ];
+      $message = new CRM_Utils_Check_Message(
+        __FUNCTION__,
+        $warning,
+        ts('Wordpress Permalinks cache needs to be refreshed.'),
+        \Psr\Log\LogLevel::WARNING,
+        'fa-wordpress',
+      );
+      $message->addAction(
+        'Open WordPress settings',
+        FALSE,
+        'href',
+        ['path' => get_admin_url(NULL, 'options-permalink.php')],
+        'fa-wordpress',
+      );
+      return [$message];
     }
 
     //sanity
